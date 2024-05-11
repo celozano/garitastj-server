@@ -3,39 +3,31 @@ require('dotenv').config();
 import axios from 'axios';
 import cors from 'cors';
 import express, { Express, Response } from 'express';
-import Redis from 'ioredis';
+import NodeCache from 'node-cache';
 
 import { parse } from './utils';
 
 const PORT = process.env.PORT || 3000;
 const BWT_URL = process.env.BWT_URL;
-const REDIS_HOST = process.env.REDIS_HOST;
-const REDIS_USERNAME = process.env.REDIS_USERNAME;
-const REDIS_PASSWORD = process.env.REDIS_PASSWORD;
+const STD_TTL = process.env.STD_TTL || 600;
 
 const app: Express = express();
-const redis = new Redis({
-  port: 6379,
-  host: REDIS_HOST,
-  username: REDIS_USERNAME,
-  password: REDIS_PASSWORD,
-  family: 6,
-});
+const nodeCache = new NodeCache();
 
 app.use(cors({ origin: '*' }));
 
 app.get('/border-wait-times', async (_, res: Response) => {
   try {
-    const cache = await redis.get('border-wait-times');
+    const cache: any = nodeCache.get('border-wait-times');
     if (cache) {
-      res.send({ ...JSON.parse(cache), source: 'redis' });
+      res.send({ ...JSON.parse(cache), source: 'cache' });
       return;
     }
 
     const response = await axios.get(BWT_URL);
     const data = await parse(response.data);
 
-    redis.set('border-wait-times', JSON.stringify(data), 'EX', 1800);
+    nodeCache.set('border-wait-times', JSON.stringify(data), STD_TTL);
 
     res.send(data);
   } catch (error) {
